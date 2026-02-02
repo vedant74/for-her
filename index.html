@@ -61,7 +61,6 @@
       color: #333;
     }
 
-    /* THE BOX WHERE THE BUTTONS LIVE */
     .button-zone {
       position: relative;
       width: 100%;
@@ -98,15 +97,8 @@
       left: 65%;
       background: #e5e7eb;
       color: #111827;
-      /* Transition removed for instant teleportation */
       transition: none; 
       z-index: 10;
-    }
-
-    .hint {
-      margin-top: 10px;
-      font-size: 13px;
-      opacity: .7;
     }
 
     .result {
@@ -166,7 +158,6 @@
         <button id="yesBtn">Yes</button>
         <button id="noBtn">No</button>
       </section>
-      <div class="hint" id="hint">“No” seems a bit shy 😈</div>
     </div>
 
     <section class="result" id="result">
@@ -181,15 +172,12 @@
     const noBtn = document.getElementById("noBtn");
     const result = document.getElementById("result");
     const askSection = document.getElementById("askSection");
-    const hint = document.getElementById("hint");
 
-    /* ---------- CONFETTI ---------- */
     const confettiCanvas = document.getElementById("confettiCanvas");
-
     function resizeConfettiCanvas() {
       const dpr = Math.max(1, window.devicePixelRatio || 1);
-      confettiCanvas.width = Math.floor(window.innerWidth * dpr);
-      confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+      confettiCanvas.width = window.innerWidth * dpr;
+      confettiCanvas.height = window.innerHeight * dpr;
     }
     resizeConfettiCanvas();
     window.addEventListener("resize", resizeConfettiCanvas);
@@ -197,22 +185,38 @@
     const confettiInstance = confetti.create(confettiCanvas, { resize: false, useWorker: true });
 
     function fullScreenConfetti() {
-      const end = Date.now() + 1600;
-      (function frame() {
-        confettiInstance({
-          particleCount: 15,
-          spread: 90,
-          startVelocity: 45,
-          origin: { x: Math.random(), y: Math.random() * 0.3 }
-        });
-        if (Date.now() < end) requestAnimationFrame(frame);
-      })();
+      const duration = 5 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      function randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      // Continuous side cannons
+      const interval = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confettiInstance(Object.assign({}, defaults, { 
+          particleCount, 
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } 
+        }));
+        confettiInstance(Object.assign({}, defaults, { 
+          particleCount, 
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } 
+        }));
+      }, 250);
+
+      // Massive initial center bursts
+      confettiInstance({ particleCount: 400, spread: 160, origin: { y: 0.6 }, colors: ['#ff3b7a', '#ffffff', '#ffafbd'] });
     }
 
-    /* ---------- NO BUTTON RUNS AWAY FAST ---------- */
-    function clamp(n, min, max) {
-      return Math.max(min, Math.min(max, n));
-    }
+    function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
     function moveNo(px, py) {
       const z = zone.getBoundingClientRect();
@@ -223,45 +227,33 @@
       let dy = (b.top + b.height / 2) - py;
       let mag = Math.hypot(dx, dy) || 1;
       
-      dx /= mag;
-      dy /= mag;
+      let jumpDist = 220; 
+      let newLeft = (b.left - z.left) + (dx / mag * jumpDist) + (Math.random() * 80 - 40);
+      let newTop  = (b.top - z.top) + (dy / mag * jumpDist) + (Math.random() * 80 - 40);
 
-      // Aggressive jump distance
-      let jumpDist = 180; 
-      let newLeft = (b.left - z.left) + (dx * jumpDist) + (Math.random() * 50 - 25);
-      let newTop  = (b.top - z.top) + (dy * jumpDist) + (Math.random() * 50 - 25);
-
-      // Boundary Clamping
       newLeft = clamp(newLeft, 0, z.width - b.width);
       newTop = clamp(newTop, 0, z.height - b.height);
 
-      // Avoid Yes Button overlap
-      const yesLocalLeft = y.left - z.left;
-      const yesLocalTop = y.top - z.top;
-      
-      if (newLeft < yesLocalLeft + y.width && newLeft + b.width > yesLocalLeft &&
-          newTop < yesLocalTop + y.height && newTop + b.height > yesLocalTop) {
-          newLeft = 0; // Snap to corner if it hits the Yes button
+      const yL = y.left - z.left; const yT = y.top - z.top;
+      if (newLeft < yL + y.width && newLeft + b.width > yL && newTop < yT + y.height && newTop + b.height > yT) {
+          newLeft = newLeft < yL ? 0 : z.width - b.width;
       }
 
       noBtn.style.left = newLeft + "px";
       noBtn.style.top = newTop + "px";
     }
 
-    // High sensitivity detection
     zone.addEventListener("pointermove", e => {
       const b = noBtn.getBoundingClientRect();
       const dist = Math.hypot((b.left + b.width / 2) - e.clientX, (b.top + b.height / 2) - e.clientY);
       if (dist < 180) moveNo(e.clientX, e.clientY);
     });
 
-    // Mobile specific behavior
     noBtn.addEventListener("touchstart", e => {
       e.preventDefault();
       moveNo(e.touches[0].clientX, e.touches[0].clientY);
     });
 
-    /* ---------- YES CLICK ---------- */
     yesBtn.addEventListener("click", () => {
       askSection.style.display = "none";
       result.style.display = "block";
